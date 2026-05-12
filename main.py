@@ -46,7 +46,8 @@ def send_telegram_alert(message):
     if not TELEGRAM_TOKEN or not CHAT_ID: return
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     payload = {"chat_id": CHAT_ID, "text": message}
-    try: requests.post(url, data=payload)
+    try: 
+        requests.post(url, json=payload)
     except: pass
 
 def send_initial_tracking_message():
@@ -56,10 +57,11 @@ def send_initial_tracking_message():
     payload = {
         "chat_id": CHAT_ID,
         "text": "⏳ جاري بدء المراقبة وتفقد الاتصال بالموقع...",
-        "disable_notification": "true"
+        "disable_notification": True
     }
     try:
-        response = requests.post(url, data=payload)
+        # استخدام json لضمان التوافق التام مع تيليجرام
+        response = requests.post(url, json=payload)
         if response.status_code == 200:
             tracking_message_id = response.json().get("result", {}).get("message_id")
     except: pass
@@ -71,7 +73,6 @@ def update_telegram_tracking_message(connection_status, is_available_text):
     
     now = datetime.now().strftime("%H:%M:%S")
     
-    # تنسيق الرسالة لتبدو واضحة جداً في تيليجرام
     msg = (
         f"🔄 *مراقبة ولاية بشار (تحديث مباشر)*\n"
         f"-----------------------------------\n"
@@ -85,13 +86,13 @@ def update_telegram_tracking_message(connection_status, is_available_text):
         "chat_id": CHAT_ID,
         "message_id": tracking_message_id,
         "text": msg,
-        "parse_mode": "Markdown" # يسمح بجعل النص عريضاً باستخدام نجمتين
+        "parse_mode": "Markdown"
     }
     try:
-        response = requests.post(url, data=payload)
+        # التعديل الأهم هنا: استخدام json بدلاً من data لكي لا يرفض تيليجرام التعديل
+        response = requests.post(url, json=payload)
         if response.status_code != 200:
             err = response.json().get("description", "")
-            # إذا حذفت الرسالة سيقوم بإنشاء غيرها تلقائياً
             if "not found" in err.lower() or "deleted" in err.lower():
                 tracking_message_id = None
                 send_initial_tracking_message()
@@ -111,7 +112,6 @@ def start_monitoring():
 
     while True:
         try:
-            # محاولة الاتصال بالموقع مع وضع حد أقصى للانتظار (10 ثواني)
             response = requests.get(API_URL, headers=headers, timeout=10)
             
             if response.status_code == 200:
@@ -153,14 +153,11 @@ def start_monitoring():
             log(f"⚠️ خطأ غير متوقع: {e}")
             update_telegram_tracking_message("خطأ في قراءة البيانات ⚠️", "غير معروف")
 
-        # الانتظار 30 ثانية قبل الفحص التالي
         time.sleep(30)
 
 if __name__ == "__main__":
-    # تشغيل الويب في مسار منفصل
     web_thread = threading.Thread(target=run_web_server)
     web_thread.daemon = True
     web_thread.start()
 
-    # تشغيل المراقبة
     start_monitoring()
